@@ -1,6 +1,9 @@
-import js from "@eslint/js"
-import ts from "@typescript-eslint/eslint-plugin"
-import tsParser from "@typescript-eslint/parser"
+import js from "@eslint/js";
+import ts from "@typescript-eslint/eslint-plugin";
+import tsParser from "@typescript-eslint/parser";
+
+import prettierConfig from "eslint-config-prettier";
+import prettierPlugin from "eslint-plugin-prettier";
 
 export default [
   {
@@ -24,12 +27,14 @@ export default [
     },
     plugins: {
       "@typescript-eslint": ts,
+      prettier: prettierPlugin,
     },
     rules: {
       ...ts.configs.recommended.rules,
       ...ts.configs["recommended-requiring-type-checking"].rules,
 
-      quotes: ["error", "double", { avoidEscape: true }],
+      "prettier/prettier": "error",
     },
   },
-]
+  prettierConfig,
+];
