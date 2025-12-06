@@ -1,10 +1,8 @@
 import fastify from "fastify";
-import GeminiEmbedding from "./services/gemini-embedding.js";
 import TensorflowEmbedding from "./services/tensorflow-embedding.js";
 import VectorDocumentStore from "./db/vector-document-store.js";
 
 import { createTextChunks } from "./utils/utils.js";
-import { processDocumentSchema, searchSchema } from "./schemas/schemas.js";
 
 export async function createApp() {
     const app = fastify();
@@ -17,9 +15,16 @@ export async function createApp() {
         reply.send({ status: "OK", timestamp: new Date().toISOString() });
     });
 
-    app.post("/documents/process", { schema: processDocumentSchema }, async (request: any, reply) => {
+    app.post("/documents/process", async (request, reply) => {
         try {
-            const { text, title, chunkSize, overlap = 100, documentId, metadata = {} } = request.body;
+            const { text, title, chunkSize, overlap = 100, documentId, metadata = {} } = request.body as {
+                text: string;
+                title: string;
+                chunkSize: number;
+                overlap?: number;
+                documentId?: string;
+                metadata?: Record<string, unknown>;
+            };
 
             const finalDocumentId = documentId || `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -29,13 +34,13 @@ export async function createApp() {
                 return reply.code(400).send({ error: "Não foi possível gerar chunks do texto fornecido" });
             }
 
-            const embeddings = await embeddingGenerator.generate(chunks);
+            const embeddings: number[][] = await embeddingGenerator.generate(chunks);
 
             const chunksData = chunks.map((chunk, index) => ({
                 documentId: finalDocumentId,
                 chunkIndex: index,
                 content: chunk,
-                embedding: embeddings[index],
+                embedding: embeddings[index] as number[],
                 metadata: {
                     ...metadata,
                     title: title,
@@ -58,18 +63,22 @@ export async function createApp() {
                 avgChunkLength: Math.round(chunks.reduce((sum, chunk) => sum + chunk.length, 0) / chunks.length)
             });
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Erro ao processar documento:", error);
             reply.code(500).send({
                 error: "Erro interno do servidor",
-                message: error.message
+                message: error instanceof Error ? error.message : "Unknown error"
             });
         }
     });
 
-    app.post("/search", { schema: searchSchema }, async (request: any, reply) => {
+    app.post("/search", async (request, reply) => {
         try {
-            const { query, limit, minSimilarity = 0.7 } = request.body;
+            const { query, limit, minSimilarity = 0.7 } = request.body as {
+                query: string;
+                limit: number;
+                minSimilarity?: number;
+            };
 
             const queryEmbeddings = await embeddingGenerator.generate([query]);
             const queryEmbedding = queryEmbeddings[0];
@@ -80,7 +89,7 @@ export async function createApp() {
 
             const similarChunks = await vectorStore.searchSimilar(queryEmbedding, limit, minSimilarity);
 
-            const results = similarChunks.map((chunk: any) => ({
+            const results = similarChunks.map((chunk: { id: number, document_id: string, chunk_index: number, content: string, metadata: Record<string, unknown>, similarity: number }) => ({
                 id: chunk.id,
                 documentId: chunk.document_id,
                 chunkIndex: chunk.chunk_index,
@@ -96,11 +105,11 @@ export async function createApp() {
                 results: results
             });
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Erro na busca:", error);
             reply.code(500).send({
                 error: "Erro interno do servidor",
-                message: error.message
+                message: error instanceof Error ? error.message : "Unknown error"
             });
         }
     });
@@ -112,11 +121,11 @@ export async function createApp() {
                 success: true,
                 statistics: stats
             });
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Erro ao obter estatísticas:", error);
             reply.code(500).send({
                 error: "Erro interno do servidor",
-                message: error.message
+                message: error instanceof Error ? error.message : "Unknown error"
             });
         }
     });
