@@ -3,10 +3,17 @@ const { Pool } = pg;
 
 class VectorDocumentStore {
   pool: pg.Pool;
-  constructor(config: { host?: string; port?: number; database?: string; user?: string; password?: string; maxConnections?: number }) {
+  constructor(config: {
+    host?: string;
+    port?: number;
+    database?: string;
+    user?: string;
+    password?: string;
+    maxConnections?: number;
+  }) {
     this.pool = new Pool({
       host: config.host || process.env.POSTGRES_HOST,
-      port: config.port as number || parseInt(process.env.POSTGRES_PORT as string),
+      port: (config.port as number) || parseInt(process.env.POSTGRES_PORT as string),
       database: config.database || process.env.POSTGRES_DB,
       user: config.user || process.env.POSTGRES_USER,
       password: config.password || process.env.POSTGRES_PASSWORD,
@@ -44,7 +51,6 @@ class VectorDocumentStore {
         CREATE INDEX IF NOT EXISTS document_chunks_doc_id_idx 
         ON document_chunks (document_id);
       `);
-
     } catch (error) {
       console.error("Erro ao inicializar banco:", error);
       throw error;
@@ -53,7 +59,15 @@ class VectorDocumentStore {
     }
   }
 
-  async saveChunks(chunks: { documentId: string; chunkIndex: number; content: string; embedding: number[]; metadata?: Record<string, unknown> }[]) {
+  async saveChunks(
+    chunks: {
+      documentId: string;
+      chunkIndex: number;
+      content: string;
+      embedding: number[];
+      metadata?: Record<string, unknown>;
+    }[],
+  ) {
     const client: PoolClient = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -70,8 +84,8 @@ class VectorDocumentStore {
             chunk.chunkIndex,
             chunk.content,
             `[${chunk.embedding.join(",")}]`,
-            JSON.stringify(chunk.metadata || {})
-          ]
+            JSON.stringify(chunk.metadata || {}),
+          ],
         );
 
         if (result.rows.length === 0) {
@@ -95,7 +109,14 @@ class VectorDocumentStore {
   async searchSimilar(embedding: number[], limit = 5, minSimilarity = 0.7) {
     const client: PoolClient = await this.pool.connect();
     try {
-      const result = await client.query<{ id: number, document_id: string, chunk_index: number, content: string, metadata: Record<string, unknown>, similarity: number }>(
+      const result = await client.query<{
+        id: number;
+        document_id: string;
+        chunk_index: number;
+        content: string;
+        metadata: Record<string, unknown>;
+        similarity: number;
+      }>(
         `SELECT 
           id, 
           document_id, 
@@ -107,7 +128,7 @@ class VectorDocumentStore {
          WHERE 1 - (embedding <=> $1) > $2
          ORDER BY embedding <=> $1
          LIMIT $3`,
-        [`[${embedding.join(",")}]`, minSimilarity, limit]
+        [`[${embedding.join(",")}]`, minSimilarity, limit],
       );
       return result.rows;
     } catch (error) {
@@ -121,12 +142,19 @@ class VectorDocumentStore {
   async getDocumentChunks(documentId: string) {
     const client: PoolClient = await this.pool.connect();
     try {
-      const result = await client.query<{ id: number, document_id: string, chunk_index: number, content: string, metadata: Record<string, unknown>, created_at: string }>(
+      const result = await client.query<{
+        id: number;
+        document_id: string;
+        chunk_index: number;
+        content: string;
+        metadata: Record<string, unknown>;
+        created_at: string;
+      }>(
         `SELECT id, document_id, chunk_index, content, metadata, created_at
          FROM document_chunks
          WHERE document_id = $1
          ORDER BY chunk_index ASC`,
-        [documentId]
+        [documentId],
       );
       return result.rows;
     } catch (error) {
@@ -140,10 +168,9 @@ class VectorDocumentStore {
   async deleteDocument(documentId: string) {
     const client: PoolClient = await this.pool.connect();
     try {
-      const result = await client.query(
-        "DELETE FROM document_chunks WHERE document_id = $1",
-        [documentId]
-      );
+      const result = await client.query("DELETE FROM document_chunks WHERE document_id = $1", [
+        documentId,
+      ]);
       return result.rowCount;
     } catch (error) {
       console.error("Erro ao deletar documento:", error);
@@ -160,7 +187,7 @@ class VectorDocumentStore {
         `UPDATE document_chunks 
          SET metadata = $1, updated_at = CURRENT_TIMESTAMP 
          WHERE id = $2`,
-        [JSON.stringify(metadata), chunkId]
+        [JSON.stringify(metadata), chunkId],
       );
     } catch (error) {
       console.error("Erro ao atualizar metadata:", error);
@@ -173,7 +200,11 @@ class VectorDocumentStore {
   async getStats() {
     const client: PoolClient = await this.pool.connect();
     try {
-      const result = await client.query<{ total_documents: number, total_chunks: number, avg_chunk_size: number }>(`
+      const result = await client.query<{
+        total_documents: number;
+        total_chunks: number;
+        avg_chunk_size: number;
+      }>(`
         SELECT 
           COUNT(DISTINCT document_id) as total_documents,
           COUNT(*) as total_chunks,
