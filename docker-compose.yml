@@ -12,6 +12,8 @@ services:
       - wsl-net
     restart: always
   rag-api:
+    depends_on:
+      - pgvector
     build: .
     container_name: rag-api
     ports:
