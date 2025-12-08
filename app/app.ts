@@ -1,11 +1,16 @@
 import fastify from "fastify";
-
+import jwt from "jsonwebtoken";
 import swagger from "@fastify/swagger";
 import swaggerUI from "@fastify/swagger-ui";
 
 import TensorflowEmbedding from "./services/tensorflow-embedding.js";
 import VectorDocumentStore from "./db/vector-document-store.js";
 import { createTextChunks } from "./utils/utils.js";
+
+const PUBLIC_ROUTES = [
+  "/api/login",
+  "/health",
+];
 
 export async function createApp() {
   const app = fastify();
@@ -40,9 +45,75 @@ export async function createApp() {
     },
   });
 
+  await app.register(import("@fastify/cors"), {
+    origin: [
+      "*"
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+  });
+
+  app.addHook("preHandler", async (request, reply) => {
+    const path = request.url?.split("?")[0] || "";
+
+    if (PUBLIC_ROUTES.includes(path)) {
+      return;
+    }
+
+    if (path.startsWith("/docs")) {
+      return;
+    }
+
+    const authHeader = request.headers["authorization"];
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+
+    if (!token) {
+      return reply.status(401).send({ error: "Token de acesso requerido" });
+    }
+
+    try {
+      jwt.verify(token, process.env.JWT_SECRET as string) as { access_token: string };
+
+    } catch (error) {
+      return reply.status(401).send({ error: "Token JWT inválido: " + error });
+    }
+  });
+
   const embeddingGenerator = new TensorflowEmbedding();
   const vectorStore = new VectorDocumentStore({});
   await vectorStore.initialize();
+
+  app.get("/api/login", 
+    {
+      schema: {
+        tags: ["Auth"],
+        summary: "Obter token de acesso",
+        description: "Endpoint para obter um token JWT de acesso à API",
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              access_token: { type: "string" },
+              token_type: { type: "string" },
+              expires_in: { type: "number" },
+            },
+          },
+        },
+      },
+    },    
+    async (request, reply) => {
+    const accessToken = jwt.sign(
+      { access_token: "rag_api_access" },
+      process.env.JWT_SECRET as string,
+      { expiresIn: "12h" },
+    );
+
+    reply.send({
+      access_token: accessToken,
+      token_type: "Bearer",
+      expires_in: 43200
+     });
+  });
 
   app.get(
     "/health",
